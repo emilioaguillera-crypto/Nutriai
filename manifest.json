@@ -1,0 +1,40 @@
+{
+  "name": "NutriIA — Tu coach nutricional",
+  "short_name": "NutriIA",
+  "description": "Coach nutricional con IA: análisis de fotos, tracking y decisiones automáticas",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0f0f0f",
+  "theme_color": "#0f0f0f",
+  "orientation": "portrait",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "./icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Registrar comida",
+      "short_name": "Foto",
+      "url": "./?page=foto",
+      "description": "Toma una foto de tu comida"
+    },
+    {
+      "name": "Ver progreso",
+      "short_name": "Progreso",
+      "url": "./?page=progreso",
+      "description": "Ver tu progreso corporal"
+    }
+  ],
+  "categories": ["health", "fitness", "food"]
+}
