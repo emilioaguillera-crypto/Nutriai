@@ -362,9 +362,9 @@ textarea:focus{border-color:var(--accent)}
   </div>
 
   <div class="card">
-    <div class="lbl" style="margin-bottom:11px">API Key de Anthropic</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:9px;line-height:1.6">Para análisis de fotos y coach IA. Obtenla GRATIS en <span style="color:var(--accent)">aistudio.google.com</span> → Get API key</div>
-    <input type="text" id="p-apikey" placeholder="sk-ant-..." style="width:100%;font-size:12px;letter-spacing:.04em">
+    <div class="lbl" style="margin-bottom:11px">API Key de Gemini (gratis)</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:9px;line-height:1.6">Obtenla GRATIS en <span style="color:var(--accent)">aistudio.google.com</span> → Get API key → Create API key</div>
+    <input type="text" id="p-apikey" placeholder="AIza..." style="width:100%;font-size:12px;letter-spacing:.04em">
     <div style="font-size:11px;color:var(--muted2);margin-top:5px">Guardada solo en tu dispositivo.</div>
   </div>
   <div class="card">
@@ -429,6 +429,18 @@ textarea:focus{border-color:var(--accent)}
 </div>
 
 <script>
+// ── GEMINI API HELPER ─────────────────────────────────────────────────────────
+function geminiErrMsg(msg){
+  if(!msg) return 'Error desconocido.';
+  if(msg.includes('quota')||msg.includes('RESOURCE_EXHAUSTED')||msg.includes('exceeded'))
+    return 'Cuota de Gemini agotada.\n\nSolución:\n1. Ve a aistudio.google.com\n2. Get API key → Create API key in NEW project\n3. Copia la nueva key\n4. Pégala en Perfil → Guardar';
+  if(msg.includes('API_KEY_INVALID')||msg.includes('invalid')||msg.includes('401'))
+    return 'API key inválida. Verifica que la copiaste completa desde aistudio.google.com';
+  if(msg.includes('PERMISSION_DENIED')||msg.includes('403'))
+    return 'Sin permisos. Crea la API key desde aistudio.google.com (no desde Google Cloud Console).';
+  return msg.slice(0,200);
+}
+
 // ── STORAGE ───────────────────────────────────────────────────────────────────
 const LS={
   g:k=>{try{return JSON.parse(localStorage.getItem(k))}catch{return null}},
@@ -801,13 +813,13 @@ async function analyzeFood(){
   if(uploadedB64){msgs=[{role:'user',parts:[{inline_data:{mime_type:'image/jpeg',data:uploadedB64}},{text:`Eres nutricionista experto. ${ctx}\nAnaliza TODOS los alimentos visibles.${txt?'\nContexto: '+txt:''}\n\n${inst}`}]}]}
   else{msgs=[{role:'user',parts:[{text:`Eres nutricionista experto. ${ctx}\nEl usuario describe: "${txt}"\n\n${inst}`}]}]}
   try{
-    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:msgs,generationConfig:{maxOutputTokens:1000,temperature:0.2}})});
+    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${key}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:msgs,generationConfig:{maxOutputTokens:1000,temperature:0.2}})});
     if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error?.message||'Error '+res.status)}
     const data=await res.json();
     const parsed=JSON.parse(data.candidates[0].content.parts.map(p=>p.text||'').join('').replace(/```json|```/g,'').trim());
     pendingFoods=parsed.foods.map(f=>({...f}));pendingRaw=parsed.foods.map(f=>({...f}));
     showAnaResult(parsed.total,pendingFoods);
-  }catch(err){alert('Error: '+err.message);console.error(err)}
+  }catch(err){alert(geminiErrMsg(err.message));console.error(err)}
   finally{document.getElementById('analyze-btn').disabled=false;document.getElementById('ana-load').style.display='none'}
 }
 function showAnaResult(total,foods){
@@ -963,14 +975,14 @@ async function runCoach(){
   const prompt=`Eres coach nutricional experto. Directo, sin rodeos.\n\nPERFIL: ${p.name||'Usuario'}, ${p.age||'?'} años, ${p.weight||'?'}kg, objetivo: ${p.goal||'perder grasa'}\nMetas: ${goalK} kcal/día · ${goalP}g proteína/día\n\nALIMENTACIÓN (${activeDate}):\n- Calorías: ${r(tot.kcal)} / ${goalK} kcal (${r(tot.kcal/goalK*100)}%)\n- Proteína: ${r(tot.prot)}g / ${goalP}g\n- Carbos: ${r(tot.carb)}g | Grasas: ${r(tot.fat)}g\n${logs.map(l=>`  • ${l.meal} ${l.time}: ${l.summary} — ${r(l.kcal)} kcal / ${r(l.prot)}g P`).join('\n')}\n\nACTIVIDAD:\n- Pasos: ${(act.steps||0).toLocaleString('es-CL')}${sB?' (+'+sB+' kcal)':''}\n- Sueño: ${act.sleep||'no registrado'}h\n- Entreno: ${act.train||'no registrado'}\n- TDEE efectivo: ${effTDEE} kcal\n\nBIENESTAR: Hambre ${hunger}/10 · Energía ${energy}/10${note?'\nNota: '+note:''}${act.sleep&&parseFloat(act.sleep)<6?'\nALERTA: sueño insuficiente':''}\n\nPESO: ${wStr}${wDelta!==null?`\nCambio 7 días: ${wDelta>0?'+':''}${wDelta}kg`:''}\n\nResponde:\n1. Evaluación directa del día (1-2 oraciones)\n2. Problema principal si existe\n3. Instrucción exacta para mañana: calorías exactas ajustadas por actividad, gramos proteína, 1 acción concreta\n4. Análisis ritmo de peso si hay datos suficientes\n\nNO des opciones. DA la decisión. Máximo 200 palabras. En español.`;
   document.getElementById('coach-btn').disabled=true;document.getElementById('coach-load').style.display='block';document.getElementById('coach-out').style.display='none';
   try{
-    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:1000,temperature:0.4}})});
+    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${key}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:1000,temperature:0.4}})});
     if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error?.message||'Error '+res.status)}
     const data=await res.json();
     const txt=data.candidates[0].content.parts.map(p=>p.text||'').join('');
     document.getElementById('coach-txt').textContent=txt;document.getElementById('coach-out-date').textContent=activeDate;document.getElementById('coach-out').style.display='block';
     const coaches=DB.coach;coaches.push({date:activeDate,time:nowStr(),text:txt});if(coaches.length>60)coaches.splice(0,coaches.length-60);DB.coach=coaches;
     renderCoachHist();renderHome();
-  }catch(err){alert('Error: '+err.message);console.error(err)}
+  }catch(err){alert(geminiErrMsg(err.message));console.error(err)}
   finally{document.getElementById('coach-btn').disabled=false;document.getElementById('coach-load').style.display='none'}
 }
 
@@ -1004,14 +1016,14 @@ async function runWeekly(){
   const prompt=`Coach de composición corporal. Analiza esta semana.\nPERFIL: ${p.name||'Usuario'}, ${p.age||'?'} años, objetivo: ${p.goal||'perder grasa'}\nMetas: ${goalK} kcal/día · ${goalP}g proteína/día\nSEMANA (${days.length}/7 días):\n${summary}\nPromedios: ${avgK} kcal/día · ${avgP}g P/día\nTop alimentos: ${top||'sin datos'}\n${prevCtx}\n\nResponde:\n1. Balance general (adherencia, calorías, proteína vs metas)\n2. Patrón principal detectado\n3. Logro de la semana\n4. Único ajuste para la semana que viene (con números exactos)\n5. Evolución del peso si hay datos\n\nMáximo 220 palabras. En español.`;
   document.getElementById('weekly-btn').disabled=true;document.getElementById('weekly-load').style.display='block';document.getElementById('weekly-out').style.display='none';
   try{
-    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:1000,temperature:0.4}})});
+    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${key}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:1000,temperature:0.4}})});
     if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error?.message||'Error '+res.status)}
     const data=await res.json();const txt=data.candidates[0].content.parts.map(p=>p.text||'').join('');
     document.getElementById('weekly-out').textContent=txt;document.getElementById('weekly-out').style.display='block';document.getElementById('weekly-btn').textContent='Regenerar resumen';
     const weekly=DB.weekly;const idx=weekly.findIndex(r=>r.wk===wk);const entry={wk,date:todayStr(),text:txt};
     if(idx>=0)weekly[idx]=entry;else weekly.push(entry);if(weekly.length>12)weekly.splice(0,weekly.length-12);DB.weekly=weekly;
     renderWeeklySection();
-  }catch(err){alert('Error: '+err.message)}
+  }catch(err){alert(geminiErrMsg(err.message))}
   finally{document.getElementById('weekly-btn').disabled=false;document.getElementById('weekly-load').style.display='none'}
 }
 
@@ -1025,11 +1037,11 @@ async function runShopping(){
   const prompt=`Nutricionista experto. Lista de compras semanal práctica.\nPERFIL: ${p.name||'Usuario'}, objetivo: ${p.goal||'perder grasa'}, meta: ${p.kcal||2200} kcal/día · ${p.prot||160}g proteína/día\nALIMENTOS FRECUENTES: ${topFreq.length?topFreq.join(', '):'sin datos'}\nESTA SEMANA: ${wFoodList.length?wFoodList.join(', '):'sin datos'}\nGenerá lista para 7 días con cantidades. Solo la lista:\n🥩 PROTEÍNAS\n- [alimento] — [cantidad]\n🌾 CARBOHIDRATOS\n- [alimento] — [cantidad]\n🥦 VERDURAS Y FRUTAS\n- [alimento] — [cantidad]\n🫙 OTROS\n- [alimento] — [cantidad]\nMáximo 25 ítems.`;
   document.getElementById('shop-btn').disabled=true;document.getElementById('shop-load').style.display='block';document.getElementById('shop-out').style.display='none';
   try{
-    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:800,temperature:0.3}})});
+    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${key}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:800,temperature:0.3}})});
     if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error?.message||'Error '+res.status)}
     const data=await res.json();const txt=data.candidates[0].content.parts.map(p=>p.text||'').join('');
     document.getElementById('shop-txt').textContent=txt;document.getElementById('shop-out').style.display='block';document.getElementById('shop-btn').textContent='Regenerar lista';
-  }catch(err){alert('Error: '+err.message)}
+  }catch(err){alert(geminiErrMsg(err.message))}
   finally{document.getElementById('shop-btn').disabled=false;document.getElementById('shop-load').style.display='none'}
 }
 function copyShop(){const txt=document.getElementById('shop-txt').textContent;navigator.clipboard.writeText(txt).then(()=>toast('t-shop')).catch(()=>{const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);toast('t-shop')})}
